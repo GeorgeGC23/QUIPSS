@@ -16,7 +16,7 @@ QUIPS Wallet es una aplicación de cartera de criptomonedas desarrollada en Rust
 
 - Rust (https://www.rust-lang.org/)
 - Cargo (incluido con Rust)
-- Visual Studio Code o cualquier editor de código de tu preferencia
+- Visual Studio Code o cualquier editor de código
 
 ## Dependencias
 
