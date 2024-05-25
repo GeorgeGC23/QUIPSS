@@ -1,4 +1,4 @@
-use iota_client::Client;
+use iota_client::ClientBuilder;
 use iota_client::Seed;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -32,57 +32,82 @@ impl User {
             .collect()
     }
 
-    async fn generate_address(&mut self) {
-        let seed = Seed::from_bytes(&hex::decode(&self.seed).unwrap()).unwrap();
-        let client = Client::builder()
-            .with_node("https://chrysalis-nodes.iota.org")
-            .unwrap()
-            .finish()
-            .await
-            .unwrap();
+    fn generate_address(&mut self) {
+        let seed_bytes = match hex::decode(&self.seed) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                eprintln!("Error decoding seed: {}", e);
+                return;
+            }
+        };
 
-        let addresses = client.get_addresses(&seed)
-            .with_range(0..1)
-            .finish()
-            .await
-            .unwrap();
+        let seed = match Seed::from_bytes(&seed_bytes) {
+            Ok(seed) => seed,
+            Err(e) => {
+                eprintln!("Error creating Seed from bytes: {}", e);
+                return;
+            }
+        };
+
+        let client_builder = match ClientBuilder::new()
+            .with_node("https://api.lb-0.h.chrysalis-devnet.iota.cafe")
+        {
+            Ok(client_builder) => client_builder,
+            Err(e) => {
+                eprintln!("Error building client builder: {}", e);
+                return;
+            }
+        };
+
+        let client = match client_builder.build() {
+            Ok(client) => client,
+            Err(e) => {
+                eprintln!("Error building client: {}", e);
+                return;
+            }
+        };
+
+        let addresses = match client.get_addresses(&seed).with_range(0..1) {
+            Ok(addresses) => addresses,
+            Err(e) => {
+                eprintln!("Error generating addresses: {}", e);
+                return;
+            }
+        };
 
         self.address = addresses[0].to_string();
         println!("Generated Address: {}", self.address);
     }
 
-    async fn check_balance(&mut self) {
-        let client = Client::builder()
-            .with_node("https://chrysalis-nodes.iota.org")
-            .unwrap()
-            .finish()
-            .await
-            .unwrap();
+    fn check_balance(&mut self) {
+        let client_builder = match ClientBuilder::new()
+            .with_node("https://api.lb-0.h.chrysalis-devnet.iota.cafe")
+        {
+            Ok(client_builder) => client_builder,
+            Err(e) => {
+                eprintln!("Error building client builder: {}", e);
+                return;
+            }
+        };
 
-        let balance = client.get_address().balance(&self.address).await.unwrap().balance;
+        let client = match client_builder.build() {
+            Ok(client) => client,
+            Err(e) => {
+                eprintln!("Error building client: {}", e);
+                return;
+            }
+        };
+
+        let balance = match client.get_address().balance(&self.address) {
+            Ok(balance) => balance.balance,
+            Err(e) => {
+                eprintln!("Error checking balance: {}", e);
+                return;
+            }
+        };
+
         self.balance = balance;
         println!("Balance: {} Mi", self.balance);
-    }
-
-    async fn send_tokens(&self, recipient_address: &str, amount: u64) {
-        let seed = Seed::from_bytes(&hex::decode(&self.seed).unwrap()).unwrap();
-        let client = Client::builder()
-            .with_node("https://chrysalis-nodes.iota.org")
-            .unwrap()
-            .finish()
-            .await
-            .unwrap();
-
-        let message = client
-            .message()
-            .with_seed(&seed)
-            .with_output(recipient_address, amount)
-            .unwrap() // Cambiado para usar unwrap aquí
-            .finish()
-            .await
-            .unwrap();
-
-        println!("Message ID: {:?}", message.id());
     }
 
     fn save_to_file(&self, filename: &str) {
@@ -96,27 +121,28 @@ impl User {
     }
 }
 
-#[tokio::main]
-async fn main() {
-    // Crear un nuevo usuario
-    let username = "test_user".to_string();
-    let mut user = User::new(username);
-    println!("Generated Seed for {}: {}", user.username, user.seed);
+fn main() {
+    let filename = "user.json";
+    let mut user: User;
 
-    // Generar una dirección IOTA
-    user.generate_address().await;
-    user.check_balance().await;
+    if !std::path::Path::new(filename).exists() {
+        // Crear un nuevo usuario
+        let username = "test_user".to_string();
+        user = User::new(username);
+        println!("Generated Seed for {}: {}", user.username, user.seed);
 
-    // Guardar el usuario en un archivo
-    user.save_to_file("user.json");
+        // Generar una dirección IOTA
+        user.generate_address();
+        user.check_balance();
 
-    // Cargar el usuario desde un archivo
-    let mut loaded_user = User::load_from_file("user.json");
-    println!("Loaded User Address: {}", loaded_user.address);
+        // Guardar el usuario en un archivo
+        user.save_to_file(filename);
+    } else {
+        // Cargar el usuario desde un archivo
+        user = User::load_from_file(filename);
+        println!("Loaded User Address: {}", user.address);
 
-    // Simular el envío de tokens a otra dirección
-    let recipient_address = "RECIPIENT_IOTA_ADDRESS_HERE"; // Reemplaza con la dirección del destinatario
-    let amount = 1_000_000; // Cantidad de tokens a enviar (en IOTA)
-    loaded_user.send_tokens(recipient_address, amount).await;
-    loaded_user.check_balance().await;
+        // Verificar el balance
+        user.check_balance();
+    }
 }
