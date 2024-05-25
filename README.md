@@ -29,3 +29,4 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8"
+hex = "0.4"
